@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "portfolio-framework",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-09-11",
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      // 首次部署前：npx wrangler kv namespace create KV，把返回的 id 填到这里
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ]
+}
