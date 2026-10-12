@@ -55,6 +55,7 @@ src/
     useSmoothScroll.ts    Lenis + GSAP ScrollTrigger（getLenis 供外部调用）
     useTheme.ts           pf-theme 主题（首帧前由 index.html 内联脚本定色）
     useArrowNav.ts        ←/→ 翻页
+    usePreviewMask.ts     设计预览的媒体色块遮罩（预览模式全程扫描）
   lib/
     brand.ts              幕布笔迹占位路径（换自己笔迹的地方）
     chapters.ts           章节名（四语，hero 与幕布共用）
@@ -94,7 +95,8 @@ public/
 - 只有 `LOCKED_ROUTES`（默认 projects / research）受保护；从任何入口导航到这两页都会先落门禁屏。
 - 通过后写 `localStorage["pf-gate"] = 时间戳`，半小时内免输入；驻留页面到点自动回门禁；`?` 章节内详情 hash 不触发。
 - 服务端：SHA-256 定长比较；同一 IP 连续失败 20 次锁 15 分钟（正确码也一并挡下，与后台登录同策略）；GET `/api/gate` 返回 `required`，接口异常时前端 fail-closed（宁可拦下）。
-- 每次输入（成功/失败）写一条 KV 记录：时间 / IP（CF-Connecting-IP）/ 设备 UA，保留 90 天；`GET /api/gate/logs`（需会话）按时间倒序返回最近 200 条——可据此自建后台「访客码记录」页。
+- 门禁屏上的「仅查看此界面的设计」：不写凭证进入受保护章节，页面布局照常展示，但图片/视频/画布一律换成随机色块（`hooks/usePreviewMask.ts`，持续扫描含弹层门户），文字由 `styles.css` 的 `[data-preview]` 规则改为占位灰条；顶部常驻提示可随时切回输入访客码。预览是一次性的，刷新即回门禁。
+- 每次输入（成功/失败）写一条 KV 记录，保留 90 天：时间 / IP（CF-Connecting-IP）/ 所在路由 / 设备与浏览器标识（UA + Client Hints）/ 语言 / 来路，以及 Cloudflare 边缘信息——国家·城市·时区·近似坐标、ASN 与运营商、边缘机房、HTTP/TLS 协议与 TCP 往返（`request.cf`，本地 wrangler dev 下为空）。`GET /api/gate/logs`（需会话）按时间倒序返回最近 200 条——可据此自建后台「访客码记录」页。
 
 ### 4. 液态玻璃（useLiquidGlass.ts + hyalite）
 

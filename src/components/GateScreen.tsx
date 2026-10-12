@@ -36,19 +36,33 @@ export const writeGate = () => {
 };
 
 /** 访客门禁：受控章节（App.tsx 的 LOCKED_ROUTES）凭访客码进入，其余页面自由访问 */
-export function GateScreen({ onPass }: { onPass: () => void }) {
+export function GateScreen({
+  onPass,
+  onPreview,
+}: {
+  onPass: () => void;
+  onPreview: () => void;
+}) {
   const { pickT } = useI18n();
   const sig = PLACEHOLDER_SIG;
   const [phase, setPhase] = useState<"checking" | "locked" | "busy" | "leaving">("checking");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // 上滑离场后去往：正常解锁（写凭证）或仅查看设计（不写凭证）
+  const leaveKind = useRef<"pass" | "preview">("pass");
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const pass = useCallback(() => {
     writeGate();
+    leaveKind.current = "pass";
+    setPhase("leaving");
+  }, []);
+
+  const preview = useCallback(() => {
+    leaveKind.current = "preview";
     setPhase("leaving");
   }, []);
 
@@ -84,7 +98,11 @@ export function GateScreen({ onPass }: { onPass: () => void }) {
       const res = await fetch("/api/gate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: value }),
+        body: JSON.stringify({
+          code: value,
+          // 记录输入时所在路由，后台「访客码记录」可区分入口
+          route: window.location.hash.slice(1).split("/")[0] || "home",
+        }),
       });
       if (res.ok) {
         pass();
@@ -128,7 +146,9 @@ export function GateScreen({ onPass }: { onPass: () => void }) {
       animate={phase === "leaving" ? { y: "-101%" } : { y: 0 }}
       transition={{ duration: reduced ? 0.01 : 0.9, ease: [0.76, 0, 0.24, 1] }}
       onAnimationComplete={() => {
-        if (phase === "leaving") onPass();
+        if (phase !== "leaving") return;
+        if (leaveKind.current === "preview") onPreview();
+        else onPass();
       }}
     >
       <div className="flex w-full flex-col items-center gap-5 px-6 text-center">
@@ -199,6 +219,20 @@ export function GateScreen({ onPass }: { onPass: () => void }) {
                 {error}
               </p>
             ) : null}
+            <button
+              type="button"
+              data-gate-preview
+              disabled={phase === "busy" || phase === "leaving"}
+              onClick={preview}
+              className="mt-1 rounded-sm px-3 py-1.5 text-[11px] tracking-[.2em] text-muted underline-offset-4 transition-colors hover:text-fg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet-400 disabled:opacity-40"
+            >
+              {pickT(
+                "仅查看此界面的设计",
+                "僅查看此界面的設計",
+                "View the design only",
+                "Voir uniquement le design",
+              )}
+            </button>
           </form>
         )}
       </div>

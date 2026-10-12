@@ -218,3 +218,23 @@ h3 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* 设计预览：文字不显示内容（fg 淡色灰条占位），图片/视频/画布由 usePreviewMask 换成随机色块。
+   规则挂在 body[data-preview] 上以便覆盖门户弹层；页头、页脚、幕布、门禁、预览横幅保持原样。 */
+[data-preview] :is(h1, h2, h3, h4, h5, h6, p, li, a, button, strong, em, small, time, label, figcaption, blockquote, dd, dt, caption, th, td, span, summary):not(:has(img, video, canvas)):not(header *, footer *, [data-preview-banner] *, [data-curtain] *, [data-visit-gate] *) {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  background-color: rgb(var(--fg) / .13);
+  border-radius: .18em;
+  user-select: none;
+}
+/* 直接以裸文本写在 div 里的内容（无任何子元素）同样视为正文遮罩 */
+[data-preview] div:not(:empty):not(:has(*)):not(header *, footer *, [data-preview-banner] *, [data-curtain] *, [data-visit-gate] *) {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  background-color: rgb(var(--fg) / .13);
+  border-radius: .18em;
+  user-select: none;
+}

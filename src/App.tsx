@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AppHeader } from "./components/AppHeader";
 import type { Route } from "./types";
 import { getLenis, useSmoothScroll } from "./hooks/useSmoothScroll";
+import { usePreviewMask } from "./hooks/usePreviewMask";
 import { useLiquidGlass } from "./hooks/useLiquidGlass";
 import { useArrowNav } from "./hooks/useArrowNav";
 import { useTheme } from "./hooks/useTheme";
@@ -84,6 +85,8 @@ export default function App() {
   const [intro, setIntro] = useState(readIntro);
   const [gate, setGate] = useState<Gate | null>(initGate);
   const [unlocked, setUnlocked] = useState(readGate);
+  // 设计预览：不写访客凭证，仅本次会话临时放行受保护章节（内容由遮罩覆盖）
+  const [preview, setPreview] = useState(false);
   useEffect(() => {
     const onHash = () => {
       const next = readRoute();
@@ -91,11 +94,11 @@ export default function App() {
       if (next === route) return;
       window.scrollTo(0, 0);
       setRoute(next);
-      // 访客码未过或凭证已过期：内容章节只渲染门禁屏，不叠章节幕布
+      // 访客码未过或凭证已过期：内容章节只渲染门禁屏，不叠章节幕布；预览模式下继续放映幕布
       if (isLocked(next)) {
         const fresh = readGate();
         setUnlocked(fresh);
-        if (!fresh) {
+        if (!fresh && !preview) {
           setGate(null);
           setIntro(false);
           return;
@@ -114,13 +117,22 @@ export default function App() {
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, [route]);
+  }, [route, preview]);
   const navigate = useCallback((next: Route) => {
     window.location.hash = next;
   }, []);
   // 访客码通过：解锁站点并为当前章节拉起章节幕布（门禁上滑落幕后接力）
   const passGate = useCallback(() => {
     setUnlocked(true);
+    setIntro(false);
+    const next = readRoute();
+    if (isGated(next) && !prefersReduced()) {
+      setGate({ route: next, nonce: 0, ready: false });
+    }
+  }, []);
+  // 仅查看设计：不写凭证、不设 unlocked；同样以章节幕布接力，内容全程由遮罩覆盖
+  const previewGate = useCallback(() => {
+    setPreview(true);
     setIntro(false);
     const next = readRoute();
     if (isGated(next) && !prefersReduced()) {
@@ -225,9 +237,11 @@ export default function App() {
   useArrowNav(route, navigate);
   const { theme, toggle } = useTheme();
   const isDeck = route === "home";
-  // 未解锁时内容章节整屏替换为访客门禁
-  const locked = !unlocked && isLocked(route);
-  if (locked) return <GateScreen onPass={passGate} />;
+  // 未解锁且非预览时，内容章节整屏替换为访客门禁
+  const locked = !unlocked && !preview && isLocked(route);
+  const previewing = preview && isLocked(route);
+  usePreviewMask(previewing);
+  if (locked) return <GateScreen onPass={passGate} onPreview={previewGate} />;
   return (
     <div className="min-h-dvh bg-bg text-fg">
       <AmbientColorField />
@@ -246,6 +260,7 @@ export default function App() {
         <motion.div
           key={route}
           data-route-view={route}
+          data-preview={previewing ? "1" : undefined}
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -12, transition: { duration: 0.2, ease: "easeIn" } }}
@@ -267,6 +282,30 @@ export default function App() {
           </Suspense>
         </motion.div>
       </AnimatePresence>
+      {previewing && (
+        <div
+          data-preview-banner
+          className="pointer-events-none fixed inset-x-0 top-20 z-[55] flex justify-center px-4"
+        >
+          <div className="pointer-events-auto flex max-w-[92vw] flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-full border border-line/25 bg-bg/85 px-5 py-2.5 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.6)] backdrop-blur-md">
+            <span className="text-[11px] tracking-[.18em] text-fg/75">
+              {pickT(
+                "设计预览 · 完整内容需凭访客码查看",
+                "設計預覽 · 完整內容需憑訪客碼查看",
+                "Design preview · full content needs the guest code",
+                "Aperçu du design · le contenu complet nécessite le code invité",
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPreview(false)}
+              className="rounded-full border border-fg/25 bg-fg/5 px-4 py-1.5 text-[11px] tracking-[.18em] text-fg transition-colors hover:bg-fg/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-violet-400"
+            >
+              {pickT("输入访客码", "輸入訪客碼", "Enter guest code", "Saisir le code invité")}
+            </button>
+          </div>
+        </div>
+      )}
       {!isDeck && <SiteFooter navigate={navigate} />}
       {!isDeck && <BackToTop />}
     </div>

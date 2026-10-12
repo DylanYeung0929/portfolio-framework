@@ -130,12 +130,50 @@ async function handleSubscribe(request: Request, env: Env): Promise<Response> {
 }
 
 /** 记录一次访客码输入（成功 / 失败），供后台「访客码记录」查看 */
-async function logGate(request: Request, env: Env, ok: boolean): Promise<void> {
+async function logGate(request: Request, env: Env, ok: boolean, route?: string): Promise<void> {
+  // Pages Functions 请求带 Cloudflare 边缘信息（request.cf）：位置、ASN、机房、协议等
+  // 纯本地 wrangler dev（非 --remote）时该字段为空，相应项记为 null
+  const cf = (request as unknown as { cf?: Record<string, unknown> }).cf ?? {};
+  const cfPick = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = cf[key];
+      if (typeof value === "string" || typeof value === "number") return value;
+    }
+    return null;
+  };
+  const header = (name: string) => request.headers.get(name) ?? null;
   const entry = {
-    ip: request.headers.get("CF-Connecting-IP") ?? "unknown",
+    ip: header("CF-Connecting-IP") ?? "unknown",
     at: new Date().toISOString(),
     ok,
-    ua: (request.headers.get("user-agent") ?? "").slice(0, 200),
+    route: route ?? null,
+    // 设备与浏览器
+    ua: (header("user-agent") ?? "").slice(0, 400) || null,
+    chUa: header("sec-ch-ua"),
+    chPlatform: header("sec-ch-ua-platform"),
+    chMobile: header("sec-ch-ua-mobile"),
+    lang: header("accept-language"),
+    // 来路
+    referer: header("referer"),
+    origin: header("origin"),
+    // 位置（Cloudflare 按 IP 推断，城市级）
+    country: cfPick("country"),
+    continent: cfPick("continent"),
+    region: cfPick("region"),
+    regionCode: cfPick("regionCode"),
+    city: cfPick("city"),
+    postalCode: cfPick("postalCode"),
+    timezone: cfPick("timezone"),
+    latitude: cfPick("latitude"),
+    longitude: cfPick("longitude"),
+    // 网络链路
+    asn: cfPick("asn"),
+    asOrg: cfPick("asOrganization"),
+    colo: cfPick("colo"),
+    httpProtocol: cfPick("httpProtocol"),
+    tlsVersion: cfPick("tlsVersion"),
+    tlsCipher: cfPick("tlsCipher"),
+    rtt: cfPick("clientTcpRtt"),
   };
   try {
     await env.KV.put(
@@ -160,9 +198,11 @@ async function handleGate(request: Request, env: Env): Promise<Response> {
   if (fails >= GATE_MAX_FAILS) return json({ error: "尝试次数过多，请 15 分钟后再试" }, 429);
 
   let code = "";
+  let route = "";
   try {
-    const body = (await request.json()) as { code?: unknown };
+    const body = (await request.json()) as { code?: unknown; route?: unknown };
     if (typeof body.code === "string") code = body.code;
+    if (typeof body.route === "string") route = body.route.slice(0, 40);
   } catch {
     code = "";
   }
@@ -173,12 +213,12 @@ async function handleGate(request: Request, env: Env): Promise<Response> {
   ]);
   if (!timingSafeEqual(given, expected)) {
     await env.KV.put(failKey, String(fails + 1), { expirationTtl: GATE_WINDOW });
-    await logGate(request, env, false);
+    await logGate(request, env, false, route);
     return json({ error: "访客码不正确" }, 401);
   }
 
   await env.KV.delete(failKey);
-  await logGate(request, env, true);
+  await logGate(request, env, true, route);
   return json({ ok: true });
 }
 

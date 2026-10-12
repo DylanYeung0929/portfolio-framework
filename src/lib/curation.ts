@@ -121,9 +121,38 @@ export async function checkSession(): Promise<boolean> {
   }
 }
 
-export type GateLog = { ip: string; at: string; ok: boolean; ua: string };
+export type GateLog = {
+  ip: string;
+  at: string;
+  ok: boolean;
+  /** 输入时所在路由 */
+  route?: string | null;
+  ua?: string | null;
+  chUa?: string | null;
+  chPlatform?: string | null;
+  chMobile?: string | null;
+  lang?: string | null;
+  referer?: string | null;
+  origin?: string | null;
+  country?: string | null;
+  continent?: string | null;
+  region?: string | null;
+  regionCode?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  timezone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  asn?: number | null;
+  asOrg?: string | null;
+  colo?: string | null;
+  httpProtocol?: string | null;
+  tlsVersion?: string | null;
+  tlsCipher?: string | null;
+  rtt?: number | null;
+};
 
-/** 访客码记录（时间 / IP / 设备），需后台会话 */
+/** 访客码记录（时间 / IP / 设备 / 位置与网络链路），需后台会话 */
 export async function fetchGateLogs(): Promise<{ ok: boolean; logs?: GateLog[]; error?: string }> {
   try {
     const res = await fetch("/api/gate/logs");
